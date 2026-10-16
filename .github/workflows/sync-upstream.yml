@@ -1,0 +1,32 @@
+# Fork do Neroued/ninfer. master espelha o original; bymav = master + os nossos commits,
+# que devem virar PR no original. Sincroniza todo dia pelo caminho oficial (gh repo sync).
+# https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/syncing-a-fork
+name: Sync upstream
+
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync master with Neroued/ninfer
+        run: gh repo sync "$GITHUB_REPOSITORY" -b master
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: bymav
+          fetch-depth: 0
+      - name: Rebase our commits on the new master
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git fetch origin master
+          git rebase origin/master
+          git push --force-with-lease origin HEAD:bymav
