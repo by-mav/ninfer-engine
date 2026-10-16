@@ -561,33 +561,34 @@ int test_assistant_item_boundaries_and_errors() {
              {"content", Json::array({Json{{"type", "reasoning_text"}, {"text", "thought"}}})}};
     const Json call = Json{
         {"type", "function_call"}, {"call_id", "call_1"}, {"name", "lookup"}, {"arguments", "{}"}};
-    const auto rejected = [&](Json input) {
-        return api_error([&] {
-            (void)parse_openai_responses_create_request(
-                Json{{"model", "m"}, {"input", std::move(input)}}, limits());
-        });
+    // Contiguous assistant Items coalesce into one turn in any arrival order: clients such as
+    // the Vercel AI SDK emit [message, function_call, message], and OpenAI accepts that shape.
+    const auto accepted = [&](Json input) {
+        input.push_back(Json{{"type", "message"}, {"role", "user"}, {"content", "next"}});
+        return parse_openai_responses_create_request(
+            Json{{"model", "m"}, {"input", std::move(input)}}, limits());
     };
-    const ApiError reasoning_after_content = rejected(Json::array({first, reasoning}));
-    failures +=
-        check(reasoning_after_content.status == 400 &&
-                  reasoning_after_content.type == "invalid_request_error" &&
-                  reasoning_after_content.code == "invalid_assistant_history" &&
-                  reasoning_after_content.param == "input" &&
-                  reasoning_after_content.message.find(
-                      "reasoning cannot follow assistant message content") != std::string::npos,
-              "reasoning after assistant content did not fail precisely");
-    const ApiError content_after_call = rejected(Json::array({call, first}));
-    failures += check(content_after_call.code == "invalid_assistant_history" &&
-                          content_after_call.message.find(
-                              "assistant message content cannot follow function_call Items") !=
-                              std::string::npos,
-                      "assistant content after calls was silently reordered");
-    const ApiError duplicate_reasoning = rejected(Json::array({reasoning, reasoning}));
-    failures +=
-        check(duplicate_reasoning.code == "invalid_assistant_history" &&
-                  duplicate_reasoning.message.find(
-                      "reasoning cannot follow another reasoning Item") != std::string::npos,
-              "duplicate reasoning Items were silently overwritten");
+    const OpenAIResponsesCreateRequest reasoning_after_content =
+        accepted(Json::array({first, reasoning}));
+    failures += check(reasoning_after_content.prompt.input_turns.size() == 2 &&
+                          reasoning_after_content.prompt.input_turns[0].reasoning_content ==
+                              "thought" &&
+                          reasoning_after_content.prompt.input_turns[0].content.size() == 1,
+                      "reasoning after assistant content was not coalesced");
+    const OpenAIResponsesCreateRequest content_after_call = accepted(Json::array(
+        {call, first,
+         Json{{"type", "function_call_output"}, {"call_id", "call_1"}, {"output", "{}"}}}));
+    failures += check(content_after_call.prompt.input_turns.size() == 3 &&
+                          content_after_call.prompt.input_turns[0].tool_calls.size() == 1 &&
+                          content_after_call.prompt.input_turns[0].content.size() == 1 &&
+                          content_after_call.prompt.input_turns[1].role == ninfer::ChatRole::Tool,
+                      "assistant content after calls was not coalesced");
+    const OpenAIResponsesCreateRequest duplicate_reasoning =
+        accepted(Json::array({reasoning, reasoning}));
+    failures += check(duplicate_reasoning.prompt.input_turns.size() == 2 &&
+                          duplicate_reasoning.prompt.input_turns[0].reasoning_content ==
+                              "thought\n\nthought",
+                      "consecutive reasoning Items were not joined");
     return failures;
 }
 
