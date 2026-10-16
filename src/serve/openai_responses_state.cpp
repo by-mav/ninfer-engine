@@ -166,7 +166,23 @@ resolve_openai_responses_prompt(const OpenAIResponsesPromptRequest& request,
     }
 
     std::vector<ChatTurn> context = flatten_openai_response_context(resolved.parent);
-    context.insert(context.end(), request.input_turns.begin(), request.input_turns.end());
+    // A client that sends previous_response_id and also replays that response's
+    // function_call (LiteLLM's MCP loop does) repeats calls already in context.
+    std::unordered_map<std::string, std::string> parent_calls;
+    for (const ChatTurn& turn : context) {
+        for (const ToolCall& call : turn.tool_calls) { parent_calls.emplace(call.id, call.name); }
+    }
+    for (ChatTurn turn : request.input_turns) {
+        if (turn.role == ChatRole::Assistant && !turn.tool_calls.empty()) {
+            const auto before = turn.tool_calls.size();
+            std::erase_if(turn.tool_calls, [&](const ToolCall& call) {
+                const auto found = parent_calls.find(call.id);
+                return found != parent_calls.end() && found->second == call.name;
+            });
+            if (turn.tool_calls.empty() && before > 0) { continue; }
+        }
+        context.push_back(std::move(turn));
+    }
     if (!has_user_query(context)) {
         invalid_input("input must provide a user query when no previous response contains one");
     }
