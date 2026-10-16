@@ -343,13 +343,20 @@ std::string parse_reasoning_item(const Json& item, Json& canonical) {
         !item.at("summary").is_array()) {
         bad_request("reasoning summary must be an array", "input");
     }
-    if (!item.contains("content") || !item.at("content").is_array()) {
-        bad_request("reasoning Item must contain a content array", "input");
+    // OpenAI makes `content` optional; clients such as LiteLLM's MCP loop replay
+    // reasoning with only `summary`. Without raw text there is nothing to replay.
+    if (item.contains("content") && !item.at("content").is_null() &&
+        !item.at("content").is_array()) {
+        bad_request("reasoning content must be an array", "input");
     }
 
     std::string text;
     Json content = Json::array();
-    for (const Json& part : item.at("content")) {
+    const Json no_parts = Json::array();
+    const Json& parts = item.contains("content") && item.at("content").is_array()
+                            ? item.at("content")
+                            : no_parts;
+    for (const Json& part : parts) {
         if (!part.is_object() || !part.contains("type") || !part.at("type").is_string() ||
             part.at("type").get<std::string>() != "reasoning_text" || !part.contains("text") ||
             !part.at("text").is_string()) {
@@ -358,14 +365,6 @@ std::string parse_reasoning_item(const Json& item, Json& canonical) {
         text += part.at("text").get<std::string>();
         content.push_back(Json{{"type", "reasoning_text"}, {"text", part.at("text")}});
     }
-    if (text.empty() &&
-        (has_encrypted || (item.contains("summary") && !item.at("summary").is_null() &&
-                           !item.at("summary").empty()))) {
-        bad_request("reasoning Items require raw reasoning_text; summary or encrypted content "
-                    "cannot reconstruct the model context",
-                    "input", "reasoning_content_not_supported");
-    }
-
     canonical = {{"id", item_id(item, "rs")},
                  {"type", "reasoning"},
                  {"summary", item.contains("summary") && !item.at("summary").is_null()
@@ -536,7 +535,9 @@ struct AssistantInputRun {
         // Clients such as the Vercel AI SDK emit [message, function_call,
         // message] for narration interleaved with calls; OpenAI accepts it.
         (void)index;
-        if (turn.reasoning_content.empty()) {
+        if (reasoning.empty()) {
+            // Summary-only or encrypted-only reasoning carries no raw text to replay.
+        } else if (turn.reasoning_content.empty()) {
             turn.reasoning_content = std::move(reasoning);
         } else {
             turn.reasoning_content += "\n\n" + reasoning;
