@@ -527,40 +527,28 @@ enum class AssistantInputPhase {
     Calls,
 };
 
-[[noreturn]] void invalid_assistant_history(std::size_t index, std::string message) {
-    bad_request("input Item " + std::to_string(index) + " " + std::move(message) +
-                    "; supported assistant Item order is reasoning, message content, then "
-                    "function calls",
-                "input", "invalid_assistant_history");
-}
-
 struct AssistantInputRun {
     AssistantInputRun() { reset(); }
 
     void append_reasoning(std::string reasoning, std::size_t index) {
-        switch (phase) {
-        case AssistantInputPhase::Empty:
+        // Contiguous assistant Items coalesce into a single turn with fixed
+        // fields, so any arrival order is equivalent to the canonical one.
+        // Clients such as the Vercel AI SDK emit [message, function_call,
+        // message] for narration interleaved with calls; OpenAI accepts it.
+        (void)index;
+        if (turn.reasoning_content.empty()) {
             turn.reasoning_content = std::move(reasoning);
-            phase                  = AssistantInputPhase::Reasoning;
-            return;
-        case AssistantInputPhase::Reasoning:
-            invalid_assistant_history(index, "reasoning cannot follow another reasoning Item");
-        case AssistantInputPhase::Content:
-            invalid_assistant_history(index, "reasoning cannot follow assistant message content");
-        case AssistantInputPhase::Calls:
-            invalid_assistant_history(index, "reasoning cannot follow function_call Items");
+        } else {
+            turn.reasoning_content += "\n\n" + reasoning;
         }
-        throw std::logic_error("unreachable assistant input phase");
+        if (phase == AssistantInputPhase::Empty) { phase = AssistantInputPhase::Reasoning; }
     }
 
     void append_message(ChatTurn message, std::size_t index) {
         if (message.role != ChatRole::Assistant) {
             throw std::logic_error("assistant input run received a non-assistant message");
         }
-        if (phase == AssistantInputPhase::Calls) {
-            invalid_assistant_history(
-                index, "assistant message content cannot follow function_call Items");
-        }
+        (void)index;
         turn.content.insert(turn.content.end(), std::make_move_iterator(message.content.begin()),
                             std::make_move_iterator(message.content.end()));
         phase = AssistantInputPhase::Content;
