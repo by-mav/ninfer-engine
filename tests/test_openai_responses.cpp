@@ -589,6 +589,14 @@ int test_assistant_item_boundaries_and_errors() {
                           duplicate_reasoning.prompt.input_turns[0].reasoning_content ==
                               "thought\n\nthought",
                       "consecutive reasoning Items were not joined");
+    const OpenAIResponsesCreateRequest summary_only = accepted(Json::array(
+        {Json{{"type", "reasoning"},
+              {"summary", Json::array({Json{{"type", "summary_text"}, {"text", "s"}}})}},
+         call, Json{{"type", "function_call_output"}, {"call_id", "call_1"}, {"output", "{}"}}}));
+    failures += check(summary_only.prompt.input_turns.size() == 3 &&
+                          summary_only.prompt.input_turns[0].reasoning_content.empty() &&
+                          summary_only.prompt.input_turns[0].tool_calls.size() == 1,
+                      "reasoning without content is ignored, as OpenAI makes content optional");
     return failures;
 }
 
@@ -776,6 +784,28 @@ int test_namespace_tools() {
         check(stored_resolved.generation.messages.back().tool_call_id == "call_stored_clock" &&
                   stored_resolved.generation.messages.back().tool_result_name == "mcp__clock__now",
               "namespaced tool result validates against previous_response_id history");
+
+    const OpenAIResponsesCreateRequest replayed_call = parse_openai_responses_create_request(
+        Json{{"model", "m"},
+             {"previous_response_id", "resp_parent"},
+             {"input", Json::array({Json{{"type", "function_call"},
+                                         {"call_id", "call_stored_clock"},
+                                         {"namespace", "mcp__clock"},
+                                         {"name", "now"},
+                                         {"arguments", "{}"}},
+                                    Json{{"type", "function_call_output"},
+                                         {"call_id", "call_stored_clock"},
+                                         {"namespace", "mcp__clock"},
+                                         {"name", "now"},
+                                         {"output", "12:00"}}})}},
+        limits());
+    const OpenAIResponsesResolvedPrompt replayed_resolved =
+        resolve_openai_responses_prompt(replayed_call.prompt, store, "resp_replayed_call", true);
+    failures += check(replayed_resolved.generation.messages.size() ==
+                              stored_resolved.generation.messages.size() &&
+                          replayed_resolved.generation.messages.back().tool_call_id ==
+                              "call_stored_clock",
+                      "a function_call replayed from previous_response_id is not a duplicate");
 
     Json collision           = body;
     collision["tool_choice"] = "auto";
