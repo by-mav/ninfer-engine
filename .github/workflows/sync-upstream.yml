@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   sync:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, monstrinho]
     steps:
       - name: Sync master with Neroued/ninfer
         run: gh repo sync "$GITHUB_REPOSITORY" -b master
