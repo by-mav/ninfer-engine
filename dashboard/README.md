@@ -47,7 +47,7 @@ inside the dashboard and does not determine container health.
 
 ## Run without Docker
 
-Requires Node.js 22.12 or newer. From this directory:
+Requires Node.js 24 or newer. From this directory:
 
 ```bash
 npm ci
