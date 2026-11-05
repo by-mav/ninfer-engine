@@ -3,19 +3,32 @@ updates:
   - package-ecosystem: docker
     directories:
       - /
+      - /dashboard
     schedule:
       interval: weekly
       day: monday
       time: "06:00"
       timezone: America/Sao_Paulo
     open-pull-requests-limit: 5
+    assignees: [rafamav]
     groups:
       docker-minor-patch:
-        patterns:
-          - '*'
-        update-types:
-          - minor
-          - patch
+        patterns: ["*"]
+        update-types: [minor, patch]
+  - package-ecosystem: docker-compose
+    directories:
+      - /dashboard
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Sao_Paulo
+    open-pull-requests-limit: 5
+    assignees: [rafamav]
+    groups:
+      docker-compose-minor-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
   - package-ecosystem: github-actions
     directories:
       - /
@@ -25,13 +38,11 @@ updates:
       time: "06:00"
       timezone: America/Sao_Paulo
     open-pull-requests-limit: 5
+    assignees: [rafamav]
     groups:
       github-actions-minor-patch:
-        patterns:
-          - '*'
-        update-types:
-          - minor
-          - patch
+        patterns: ["*"]
+        update-types: [minor, patch]
   - package-ecosystem: pip
     directories:
       - /eval
@@ -43,10 +54,8 @@ updates:
       time: "06:00"
       timezone: America/Sao_Paulo
     open-pull-requests-limit: 5
+    assignees: [rafamav]
     groups:
       pip-minor-patch:
-        patterns:
-          - '*'
-        update-types:
-          - minor
-          - patch
+        patterns: ["*"]
+        update-types: [minor, patch]
