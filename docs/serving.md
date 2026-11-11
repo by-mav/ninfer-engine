@@ -269,6 +269,8 @@ never overwritten.
 Top-level `tool_constraints:"auto"` opts into request-driven constraints: ordinary non-strict
 `tool_choice:"auto"` then uses free generation. Strict tools, selection/count restrictions, and
 `tool_choice:"none"` still enforce their requirements. `tool_constraints:"basic"` is the default.
+A Qwen request that replays tool calls or results without declaring tools follows the
+`tool_choice:"none"` contract: the answer cannot start a tool call.
 
 With JSON object/schema output, `auto` permits either a JSON answer or a complete tool-call sequence.
 Required/named choices permit calls for that turn; after supplying the tool result, use `auto` for
