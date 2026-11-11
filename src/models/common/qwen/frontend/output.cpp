@@ -32,6 +32,12 @@ models::frontend::OutputSession create_output_session(
     StopPolicy policy = resources.text.stop_policy(caller_stop);
     if (output.raw) { policy.publish_stop_token = true; }
     auto tool_contract = select_tool_call_contract(prompt.tools, tool_choice);
+    // Replayed tool calls without declarations leave nothing callable: tool_choice "none".
+    if (!tool_contract && prompt.has_tool_history) {
+        auto none         = std::make_shared<ToolCallOutputContract>();
+        none->constrained = true;
+        tool_contract     = std::move(none);
+    }
     if (constraint && tool_contract && tool_contract->tools.empty()) tool_contract.reset();
     const bool combined = constraint && tool_contract && !tool_contract->tools.empty();
     if (combined) {
