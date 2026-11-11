@@ -2100,6 +2100,21 @@ int test_tools_and_json_output() {
     return failures;
 }
 
+int test_tool_history_without_declarations() {
+    const Frontend frontend = make_frontend(resources());
+    ninfer::PromptInput input;
+    input.options.enable_thinking = false;
+    input.messages                = {
+        {.role = ninfer::ChatRole::User, .parts = {{.text = "run the tool"}}},
+        {.role       = ninfer::ChatRole::Assistant,
+         .tool_calls = {{.id = "first", .name = "noop", .arguments_json = "{}"}}},
+        {.role = ninfer::ChatRole::Tool, .parts = {{.text = "done"}}, .tool_call_id = "first"}};
+    const bool replay = frontend.make_output_session(frontend.prepare(input), {}).constrained();
+    input.messages.resize(1);
+    const bool plain = frontend.make_output_session(frontend.prepare(input), {}).constrained();
+    return check(replay && !plain, "tool history without declarations can start another call");
+}
+
 int test_structured_tool_output() {
     const Frontend frontend = make_frontend(resources());
 
@@ -2912,6 +2927,7 @@ int main() {
     failures += test_cross_round_stop(frontend);
     failures += test_same_token_stop_priority(frontend);
     failures += test_terminal_flush(frontend);
+    failures += test_tool_history_without_declarations();
     failures += test_structured_tool_output();
     failures += test_tools_and_json_output();
     failures += test_reasoning_split(frontend);
